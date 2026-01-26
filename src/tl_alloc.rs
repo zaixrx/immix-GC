@@ -1,6 +1,6 @@
 // Resources:
 // - https://www.steveblackburn.org/pubs/papers/immix-pldi-2008.pdf
-// - https://rust-hosted-langs.github.io/book/chapter-simple-bump.html
+// - https://rust-hosted-langs.github.io/book/chapter-simple-bump.html -- Section 3.X
 
 use crate::block::*;
 
@@ -16,25 +16,25 @@ const LINE_SIZE: usize = 1 << LINE_SIZE_BITS;
 const LINES_COUNT: usize = BLOCK_SIZE / LINE_SIZE;
 const BLOCK_CAPACITY: usize = BLOCK_SIZE - LINES_COUNT;
 
-// free region bounds = { bump_block.limit, ... , bump_block.cursor - 1 }
-pub struct BumpBlock {
+// current free region bounds = { bump_block.limit, ... , bump_block.cursor - 1 }
+pub struct ThreadLocalAllocator {
     block: Block,
+    meta: BlockMeta,
     limit: *const u8,
     cursor: *const u8,
-    meta: BlockMeta,
 }
 
 pub struct BlockMeta {
     lines: *const u8,
 }
 
-impl BumpBlock {
-    pub fn build() -> Result<BumpBlock, BlockError> {
+impl ThreadLocalAllocator {
+    pub fn build() -> Result<ThreadLocalAllocator, BlockError> {
         let block = Block::build(BLOCK_SIZE)?;
         let limit = block.as_ptr();
         let cursor = unsafe { block.as_ptr().add(BLOCK_CAPACITY) };
         let lines = unsafe { block.as_ptr().add(BLOCK_CAPACITY) };
-        Ok(BumpBlock{ block, limit, cursor, meta: BlockMeta{ lines }, })
+        Ok(ThreadLocalAllocator{ block, limit, cursor, meta: BlockMeta{ lines }, })
     }
 
     // returns the biggest sequance of free lines containning-
@@ -69,7 +69,7 @@ impl BumpBlock {
         None
     }
 
-    fn inner_alloc(&mut self, size: usize) -> Option<*const u8> {
+    pub fn inner_alloc(&mut self, size: usize) -> Option<*const u8> {
         let cursor = self.cursor as usize;
         let limit = self.limit as usize;
         let target = cursor.checked_sub(size)? & ALLOC_ALIGN_MASK;
@@ -79,10 +79,12 @@ impl BumpBlock {
             return Some(self.cursor);
         }
 
-        if let Some((cursor, limit)) = self.find_free_region(cursor, size) {
-            self.cursor = cursor as *const u8;
-            self.limit = limit as *const u8;
-            return self.inner_alloc(size);
+        if target >= self.block.as_ptr() as usize {
+            if let Some((cursor, limit)) = self.find_free_region(cursor, size) {
+                self.cursor = cursor as *const u8;
+                self.limit = limit as *const u8;
+                return self.inner_alloc(size);
+            }
         }
 
         None

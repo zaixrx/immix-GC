@@ -1,7 +1,8 @@
 // Resources:
 // - https://www.steveblackburn.org/pubs/papers/immix-pldi-2008.pdf
 // - https://rust-hosted-langs.github.io/book/chapter-simple-bump.html -- Section 3.X
-use crate::block::*;
+use crate::block::Block;
+use crate::api_alloc::AllocError;
 
 // Constants from Immix Paper
 const BLOCK_SIZE_BITS: usize = 15;
@@ -14,16 +15,15 @@ const ALLOC_ALIGN_MASK: usize = !(size_of::<usize>() - 1);
 const LINES_COUNT: usize = BLOCK_SIZE / LINE_SIZE;
 const BLOCK_CAPACITY: usize = BLOCK_SIZE - LINES_COUNT;
 
+
 #[derive(PartialEq)]
 pub enum SizeClass {
-    Small, // exactly one line
-    Medium, // more than one line
-    Large,  // more than block
-}
-
-pub enum Mark {
-    Live,
-    Free,
+    /// exactly one line
+    Small,
+    /// more than one line
+    Medium,
+    /// more than block
+    Large,
 }
 
 impl SizeClass {
@@ -45,7 +45,10 @@ pub struct ThreadLocalAllocator {
 }
 
 pub struct BlockMeta {
-    lines: *const u8,
+    /// Used to mark lines as alive
+    /// NOTE: last `LINES_COUNT/LINE_SIZE` bytes aren't used for marking
+    /// hence the final byte in the `line_map` is used to mark the block
+    line_map: *const u8,
 }
 
 impl ThreadLocalAllocator {
@@ -53,8 +56,8 @@ impl ThreadLocalAllocator {
         let block = Block::build(BLOCK_SIZE)?;
         let limit = block.as_ptr();
         let cursor = unsafe { block.as_ptr().add(BLOCK_CAPACITY) };
-        let lines = unsafe { block.as_ptr().add(BLOCK_CAPACITY) };
-        Ok(ThreadLocalAllocator{ block, limit, cursor, meta: BlockMeta{ lines }, })
+        let line_map = unsafe { block.as_ptr().add(BLOCK_CAPACITY) };
+        Ok(ThreadLocalAllocator{ block, limit, cursor, meta: BlockMeta{ line_map }, })
     }
 
     pub fn current_hole_size(&self) -> usize {
@@ -73,7 +76,7 @@ impl ThreadLocalAllocator {
         let mut count = 0;
 
         for line_index in (0..starting_line).rev() {
-            let is_marked = unsafe { *self.meta.lines.add(line_index) };
+            let is_marked = unsafe { *self.meta.line_map.add(line_index) };
             if is_marked == 0 {
                 count += 1;
                 if line_index == 0 && count >= occupied_lines {

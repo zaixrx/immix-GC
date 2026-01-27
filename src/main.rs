@@ -1,10 +1,10 @@
 mod tl_alloc;
 mod g_alloc;
+mod api_alloc;
 mod block;
 
-use block::AllocError;
-use g_alloc::{AllocHeader, AllocObject, AllocRaw, AllocTypeId, GlobalAllocator};
-use tl_alloc::Mark;
+use api_alloc::*;
+use g_alloc::ScopedGlobalAllocator;
 
 #[derive(Clone, Copy)]
 enum ObjectType {

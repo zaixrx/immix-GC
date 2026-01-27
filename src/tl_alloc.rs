@@ -21,6 +21,11 @@ pub enum SizeClass {
     Large,  // more than block
 }
 
+pub enum Mark {
+    Live,
+    Free,
+}
+
 impl SizeClass {
     pub fn new(size: usize) -> Self {
         match (size + LINE_SIZE - 1) / LINE_SIZE {
@@ -44,7 +49,7 @@ pub struct BlockMeta {
 }
 
 impl ThreadLocalAllocator {
-    pub fn build() -> Result<ThreadLocalAllocator, BlockError> {
+    pub fn build() -> Result<ThreadLocalAllocator, AllocError> {
         let block = Block::build(BLOCK_SIZE)?;
         let limit = block.as_ptr();
         let cursor = unsafe { block.as_ptr().add(BLOCK_CAPACITY) };

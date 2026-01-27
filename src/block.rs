@@ -10,15 +10,17 @@ pub type BlockPtr = NonNull<u8>;
 pub type BlockSize = usize;
 
 #[derive(Debug)]
-pub enum BlockError {
+pub enum AllocError {
+    /// requested invalid `size`
     BadRequest,
-    OOM, 
+    /// out of memory
+    OOM,
 }
 
 impl Block {
-    pub fn build(size: BlockSize) -> Result<Self, BlockError> {
+    pub fn build(size: BlockSize) -> Result<Self, AllocError> {
         if !size.is_power_of_two() {
-            return Err(BlockError::BadRequest);
+            return Err(AllocError::BadRequest);
         }
         Ok(Block {
             ptr: internal::alloc_block(size)?,
@@ -41,12 +43,12 @@ impl Drop for Block {
 mod internal {
     use super::*;
 
-    pub fn alloc_block(size: BlockSize) -> Result<BlockPtr, BlockError> {
+    pub fn alloc_block(size: BlockSize) -> Result<BlockPtr, AllocError> {
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, size);
             let ptr = std::alloc::alloc(layout);
             if ptr.is_null() {
-                return Err(BlockError::OOM);
+                return Err(AllocError::OOM);
             } else {
                 return Ok(NonNull::new_unchecked(ptr));
             }

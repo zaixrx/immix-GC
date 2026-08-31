@@ -1,4 +1,4 @@
-use crate::g_alloc::RawPtr;
+use crate::{block::BlockError};
 use std::{cell::Cell, ptr::NonNull};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -17,6 +17,11 @@ pub enum AllocError {
 
 pub trait ScopedRef<T> {
     fn scoped_ref<'scope>(&self, guard: &'scope dyn MutatorScope) -> &'scope T;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RawPtr<T: Sized> {
+    ptr: NonNull<T>,
 }
 
 /// used to bridge `RawPtr` and `ScopedPtr`
@@ -83,6 +88,25 @@ pub trait AllocRaw {
     fn get_object(header: NonNull<Self::Header>) -> NonNull<()>;
 }
 
+impl <T: Sized> RawPtr<T> {
+    /// Creates a new RawPtr
+    /// 
+    /// SAFETY: `ptr` must not be null
+    pub fn new(ptr: *mut T) -> Self {
+        unsafe {
+            Self {
+                ptr: NonNull::new_unchecked(ptr)
+            }
+        }
+    }
+}
+
+impl<T: Sized> ScopedRef<T> for RawPtr<T> {
+    fn scoped_ref<'scope>(&self, _guard: &'scope dyn MutatorScope) -> &'scope T {
+        unsafe { &*self.ptr.as_ptr() }
+    }
+}
+
 impl<T: Sized> CellPtr<T>
 where 
     RawPtr<T>: Copy,
@@ -100,5 +124,22 @@ impl<'guard, T: Sized> ScopedPtr<'guard, T> {
         CellPtr::<T>{
             inner: Cell::new(ptr),
         }.get(guard)
+    }
+}
+
+impl From<BlockError> for AllocError {
+    fn from(e: BlockError) -> Self {
+        match e {
+            BlockError::BadRequest => AllocError::BadRequest,
+            BlockError::OOM => AllocError::OOM,
+        }
+    }
+}
+
+impl<'guard, T: Sized> std::ops::Deref for ScopedPtr<'guard, T> {
+    type Target = T;
+
+    fn deref(&self) -> &'guard Self::Target {
+        self.ptr
     }
 }

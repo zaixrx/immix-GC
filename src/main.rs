@@ -1,10 +1,10 @@
-mod tl_alloc;
-mod g_alloc;
-mod api_alloc;
+mod bump;
+mod alloc;
+mod alloc_api;
 mod block;
 
-use api_alloc::*;
-use g_alloc::ScopedGlobalAllocator;
+use alloc_api::*;
+use alloc::ScopedGlobalAllocator;
 
 #[derive(Clone, Copy)]
 enum ObjectType {
@@ -17,9 +17,9 @@ enum ObjectType {
 
 impl AllocTypeId for ObjectType {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct Person {
-    name: String,
+    name: &'static str,
     score: usize, 
 }
 
@@ -27,6 +27,7 @@ impl AllocObject<ObjectType> for Person {
     const TYPE_ID: ObjectType = ObjectType::SynStruct;
 }
 
+#[allow(unused)]
 struct ObjectHeader {
     type_id: ObjectType,
     size: usize,
@@ -62,20 +63,14 @@ impl AllocHeader for ObjectHeader {
 }
 
 fn main() -> Result<(), AllocError> {
-    let galloc = GlobalAllocator::<ObjectHeader>::new();
+    let mutator = ScopedGlobalAllocator::<'static, ObjectHeader>::new_static();
 
-    let person_ptr = galloc.alloc(Person {
-        name: String::from("KOUA Mohamed Anis"),
+    let person = mutator.alloc(Person {
+        name: "KOUA Mohamed Anis",
         score: 69420,
     })?;
 
-    let player = unsafe { &mut (*player_ptr) };
-    player.name = String::from("Hello, World!");
-    player.score = 100;
-    dbg!(player);
-
-    let space = galloc.alloc(1 << 20);
-    println!("{:?}", space);
+    println!("[{:016X}] -> name: {}, score: {} ", person.ptr as *const Person as usize, person.name, person.score);
 
     Ok(())
 }

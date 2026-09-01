@@ -1,18 +1,14 @@
+use crate::alloc_api::{AllocError, AllocHeader, AllocObject, AllocTypeId, Mark, MutatorScope};
+
+mod block;
 mod bump;
 mod alloc;
 mod alloc_api;
-mod block;
-
-use alloc_api::*;
-use alloc::ScopedGlobalAllocator;
 
 #[derive(Clone, Copy)]
 enum ObjectType {
-    SynBool,
-    SynInt,
-    SynString,
     SynStruct,
-    SynArrayU8,
+    SynArray,
 }
 
 impl AllocTypeId for ObjectType {}
@@ -29,9 +25,9 @@ impl AllocObject<ObjectType> for Person {
 
 #[allow(unused)]
 struct ObjectHeader {
-    type_id: ObjectType,
     size: usize,
     mark: Mark,
+    type_id: ObjectType,
 }
 
 impl AllocHeader for ObjectHeader {
@@ -47,7 +43,7 @@ impl AllocHeader for ObjectHeader {
 
     fn new_array(size: usize, mark: Mark) -> Self {
         Self {
-            type_id: ObjectType::SynArrayU8,
+            type_id: ObjectType::SynArray,
             size,
             mark
         }
@@ -62,15 +58,10 @@ impl AllocHeader for ObjectHeader {
     }
 }
 
-fn main() -> Result<(), AllocError> {
-    let mutator = ScopedGlobalAllocator::<'static, ObjectHeader>::new_static();
+fn introduce_guard_scope() {
 
-    let person = mutator.alloc(Person {
-        name: "KOUA Mohamed Anis",
-        score: 69420,
-    })?;
+    
+}
 
-    println!("[{:016X}] -> name: {}, score: {} ", person.ptr as *const Person as usize, person.name, person.score);
-
-    Ok(())
+fn main() -> () {
 }

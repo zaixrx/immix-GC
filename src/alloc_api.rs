@@ -15,11 +15,10 @@ pub enum AllocError {
     OOM,
 }
 
-pub trait ScopedRef<T> {
-    fn scoped_ref<'scope>(&self, guard: &'scope dyn MutatorScope) -> &'scope T;
-}
-
 #[derive(Debug, Clone, Copy)]
+/// by default a instance of `AllowRaw` returns a `RawPtr`, which
+/// are unsafe to use because it requires dereferncing a pointer
+/// so `ScopedPtr` alongside
 pub struct RawPtr<T: Sized> {
     ptr: NonNull<T>,
 }
@@ -36,11 +35,8 @@ where
 
 /// used to safely derefrence `RawPtr`
 pub struct ScopedPtr<'guard, T: Sized> {
-    pub ptr: &'guard T,
+    pub value: &'guard T,
 }
-
-/// used to define the 'guard lifetime
-pub trait MutatorScope {}
 
 pub trait AllocTypeId: Copy + Clone {}
 
@@ -88,14 +84,24 @@ pub trait AllocRaw {
     fn get_object(header: NonNull<Self::Header>) -> NonNull<()>;
 }
 
+/// used to provide a safe method to dereference a pointer
+pub trait ScopedRef<T> {
+    fn scoped_ref<'scope>(&self, guard: &'scope dyn MutatorScope) -> &'scope T;
+}
+
+/// used to define the 'guard lifetime
+pub trait MutatorScope {}
+
 impl <T: Sized> RawPtr<T> {
-    /// Creates a new RawPtr
-    /// 
-    /// SAFETY: `ptr` must not be null
-    pub fn new(ptr: *mut T) -> Self {
+    /// Creates a new `RawPtr` containing the given pointer (`ptr`).
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must not be null.
+    pub unsafe fn new(ptr: *const T) -> Self {
         unsafe {
             Self {
-                ptr: NonNull::new_unchecked(ptr)
+                ptr: NonNull::new_unchecked(ptr as *mut T)
             }
         }
     }
@@ -111,19 +117,37 @@ impl<T: Sized> CellPtr<T>
 where 
     RawPtr<T>: Copy,
 {
+    pub unsafe fn new_from(ptr: ScopedPtr<'_, T>) -> Self {
+        unsafe {
+            Self {
+                inner: Cell::new(RawPtr::new(ptr.value))
+            }
+        }
+    }
+
     pub fn get<'guard>(&self, guard: &'guard dyn MutatorScope) -> ScopedPtr<'guard, T> {
-        ScopedPtr { ptr: self.inner.get().scoped_ref(guard) }
+        ScopedPtr {
+            value: self.inner.get().scoped_ref(guard)
+        }
     }
 }
 
 impl<'guard, T: Sized> ScopedPtr<'guard, T> {
-    pub fn new(guard: &'guard dyn MutatorScope, ptr: RawPtr<T>) -> Self 
+    pub fn new(_guard: &'guard dyn MutatorScope, value: &'guard T) -> Self 
     where 
         RawPtr<T>: Copy
     {
-        CellPtr::<T>{
-            inner: Cell::new(ptr),
-        }.get(guard)
+        Self {
+            value
+        }
+    }
+}
+
+impl<'guard, T: Sized> std::ops::Deref for ScopedPtr<'guard, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.value
     }
 }
 
@@ -133,13 +157,5 @@ impl From<BlockError> for AllocError {
             BlockError::BadRequest => AllocError::BadRequest,
             BlockError::OOM => AllocError::OOM,
         }
-    }
-}
-
-impl<'guard, T: Sized> std::ops::Deref for ScopedPtr<'guard, T> {
-    type Target = T;
-
-    fn deref(&self) -> &'guard Self::Target {
-        self.ptr
     }
 }

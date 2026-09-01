@@ -3,36 +3,34 @@ use std::{cell::UnsafeCell, marker::PhantomData, mem::replace, ptr::NonNull};
 
 const WORD_SIZE: usize = size_of::<usize>();
 
-pub struct UnsafeRawAllocator {
+pub struct BlockList {
     head: Option<BumpAllocator>,
     overflow: Option<BumpAllocator>,
-    freed: Vec<BumpAllocator>,
-    large: Vec<Block>,
+    rest: Vec<BumpAllocator>,
 }
 
-pub struct UnsafeAllocator<H: AllocHeader> {
-    inner: UnsafeCell<UnsafeRawAllocator>,
+pub struct StickyImmixHeap<H: AllocHeader> {
+    inner: UnsafeCell<BlockList>,
     _header_type: PhantomData<*const H>,
 }
 
-pub struct ScopedGlobalAllocator<'memory, H: AllocHeader> {
-    inner: &'memory UnsafeAllocator<H>,
+pub struct Heap<H: AllocHeader> {
+    heap: StickyImmixHeap<H>,
 }
 
-impl UnsafeRawAllocator {
+impl BlockList {
     pub fn new() -> Self {
         Self {
             head: None,
             overflow: None,
-            freed: Vec::new(),
-            large: Vec::new(),
+            rest: Vec::new(),
         }
     }
 
     pub fn alloc(&mut self, size: usize) -> Result<*const u8, AllocError> {
         let class = SizeClass::new(size);
         if  class == SizeClass::Large {
-            todo!("UnsafeRawAllocator: SizeClass::Large")
+            todo!("BlockList: SizeClass::Large")
         }
 
         match self.head {
@@ -46,8 +44,10 @@ impl UnsafeRawAllocator {
                             Ok(space) => Ok(space),
                             Err(BlockError::OOM) => {
                                 let old = replace(head, BumpAllocator::build()
-                                    .expect("UnsafeRawAllocator: out of memory"));
-                                self.freed.push(old);
+                                    .expect("BlockList: out of memory"));
+
+                                self.rest.push(old);
+
                                 head.inner_alloc(size).map_err(Into::into)
                             },
                             Err(BlockError::BadRequest) => Err(AllocError::BadRequest)
@@ -57,10 +57,13 @@ impl UnsafeRawAllocator {
             },
             None => {
                 let mut bump = BumpAllocator::build()
-                    .expect("UnsafeRawAllocator: out of memory");
-                let space = bump.inner_alloc(size).map_err(Into::into);
+                    .expect("BlockList: out of memory");
+
+                let memory = bump.inner_alloc(size).map_err(Into::into);
+
                 self.head = Some(bump);
-                space
+
+                memory
             }
         }
     }
@@ -74,8 +77,10 @@ impl UnsafeRawAllocator {
                     Ok(space) => Ok(space),
                     Err(BlockError::OOM) => {
                         let old = replace(overflow, BumpAllocator::build()
-                                    .expect("UnsafeRawAllocator: out of memory"));
-                        self.freed.push(old);
+                                    .expect("BlockList: out of memory"));
+
+                        self.rest.push(old);
+
                         overflow.inner_alloc(size).map_err(Into::into)
                     },
                     Err(BlockError::BadRequest) => Err(AllocError::BadRequest)
@@ -83,37 +88,40 @@ impl UnsafeRawAllocator {
             },
             None => {
                 let mut bump = BumpAllocator::build()
-                    .expect("UnsafeRawAllocator: out of memory");
+                    .expect("BlockList: out of memory");
+
                 let space = bump.inner_alloc(size).map_err(Into::into);
+
                 self.overflow = Some(bump);
+
                 space
             }
         }
     }
 }
 
-impl<H: AllocHeader> UnsafeAllocator<H> {
+impl<H: AllocHeader> StickyImmixHeap<H> {
     pub fn new() -> Self {
-        let inner = UnsafeRawAllocator::new();
-        UnsafeAllocator {
+        let inner = BlockList::new();
+        StickyImmixHeap {
             inner: UnsafeCell::new(inner),
             _header_type: PhantomData
         }
     }
 
+    /// Used to provide an immutable allocator interface, to comply with
+    /// the internal mutability pattern
     fn inner_alloc(&self, size: usize) -> Result<*const u8, AllocError> {
-        let inner: &mut UnsafeRawAllocator = unsafe {
+        let inner: &mut BlockList = unsafe {
             &mut *self.inner.get()
         };
         inner.alloc(size)
     }
 }
 
-impl<H: AllocHeader> AllocRaw for UnsafeAllocator<H> {
+impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
     type Header = H;
 
-    /// Allocates an data object of `Sized` type `T`, and copies `object` into
-    /// the freshly allocated memory
     fn alloc<T>(&self, object: T) -> Result<RawPtr<T>, AllocError>
     where
         T: AllocObject<<Self::Header as AllocHeader>::TypeId> {
@@ -124,14 +132,13 @@ impl<H: AllocHeader> AllocRaw for UnsafeAllocator<H> {
         let size = (total_size + WORD_SIZE - 1) / WORD_SIZE;
         let memory = self.inner_alloc(size)?;
 
-        // here for debugging purposes
         let mask = ALLOC_ALIGNMENT - 1;
         // println!("{:016X}", memory as usize);
         assert_eq!((memory as usize & mask) ^ mask, mask);
 
-        unsafe {
-            let header = Self::Header::new::<T>(object_size, Mark::Live);
+        let header = Self::Header::new::<T>(object_size, Mark::Live);
 
+        unsafe {
             let memory = memory as *mut Self::Header;
             std::ptr::write(memory , header);
 
@@ -142,7 +149,6 @@ impl<H: AllocHeader> AllocRaw for UnsafeAllocator<H> {
         }
     }
 
-    /// Allocates an array of `arr_size` bytes, the allocated memory
     /// get's zero initialized
     fn alloc_array(&self, arr_size: usize) -> Result<RawPtr<u8>, AllocError> {
         let header_size = size_of::<Self::Header>();
@@ -151,13 +157,12 @@ impl<H: AllocHeader> AllocRaw for UnsafeAllocator<H> {
         let size = (total_size + WORD_SIZE - 1) / WORD_SIZE;
         let memory = self.inner_alloc(size)?;
 
-        // here for debugging purposes
         let mask = WORD_SIZE - 1;
         assert_eq!((memory as usize & mask) ^ mask, mask);
 
-        unsafe {
-            let header = Self::Header::new_array(size, Mark::Live);
+        let header = Self::Header::new_array(size, Mark::Live);
 
+        unsafe {
             let memory = memory as *mut Self::Header;
             std::ptr::write(memory, header);
 
@@ -180,30 +185,6 @@ impl<H: AllocHeader> AllocRaw for UnsafeAllocator<H> {
     fn get_object(header: NonNull<Self::Header>) -> NonNull<()> {
         unsafe {
             header.offset(1).cast::<()>()
-        }
-    }
-}
-
-impl<'memory, H: AllocHeader> MutatorScope for ScopedGlobalAllocator<'memory, H> {}
-
-impl<'memory, H: AllocHeader> ScopedGlobalAllocator<'memory, H> {
-    pub fn alloc<T>(&self, object: T) -> Result<ScopedPtr<'_, T>, AllocError>
-    where
-        T: AllocObject<H::TypeId>,
-        RawPtr<T>: Copy,
-    {
-        Ok(ScopedPtr::new(
-            self,
-            self.inner.alloc(object)?
-        ))
-    }
-}
-
-
-impl <'memory, H: AllocHeader> ScopedGlobalAllocator<'static, H> {
-    pub fn new_static() -> ScopedGlobalAllocator<'static, H> {
-        Self {
-            inner: Box::leak(Box::new(UnsafeAllocator::<H>::new()))
         }
     }
 }

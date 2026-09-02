@@ -1,67 +1,55 @@
-use crate::alloc_api::{AllocError, AllocHeader, AllocObject, AllocTypeId, Mark, MutatorScope};
+use crate::rawptr::AllocObject;
+use crate::object::{ObjectType, RuntimeError};
+use crate::memory::{Memory, Mutator, MutatorView};
+
+mod error;
 
 mod block;
 mod bump;
-mod alloc;
-mod alloc_api;
 
-#[derive(Clone, Copy)]
-enum ObjectType {
-    SynStruct,
-    SynArray,
+mod rawptr;
+mod stickyimmix;
+
+mod safeptr;
+mod memory;
+
+// TODO(API): make that user defined
+mod object;
+
+#[derive(Copy, Clone)]
+struct SynI32 {
+    value: i32
 }
 
-impl AllocTypeId for ObjectType {}
-
-#[derive(Debug, Copy, Clone)]
-struct Person {
-    name: &'static str,
-    score: usize, 
+impl AllocObject<ObjectType> for SynI32 {
+    const TYPE_ID: ObjectType = ObjectType::SynI32;
 }
 
-impl AllocObject<ObjectType> for Person {
-    const TYPE_ID: ObjectType = ObjectType::SynStruct;
-}
+struct ExampleMutator;
 
-#[allow(unused)]
-struct ObjectHeader {
-    size: usize,
-    mark: Mark,
-    type_id: ObjectType,
-}
+impl Mutator for ExampleMutator {
+    type Input = ();
+    type Output = ();
 
-impl AllocHeader for ObjectHeader {
-    type TypeId = ObjectType;
+    fn run<'memory>(&self, mem: &'memory MutatorView, _input: Self::Input) -> Result<Self::Output, RuntimeError> {
+        let object = SynI32 { value: 694201337 };
 
-    fn new<O: AllocObject<Self::TypeId>>(size: usize, mark: Mark) -> Self {
-        Self {
-            type_id: O::TYPE_ID,
-            size,
-            mark
-        }
+        let p_object = mem.alloc(object).map_err(|err| RuntimeError::MemoryError(err))?;
+
+        assert_eq!(p_object.value.value, object.value);
+
+        println!(":3");
+
+        Ok(())
     }
-
-    fn new_array(size: usize, mark: Mark) -> Self {
-        Self {
-            type_id: ObjectType::SynArray,
-            size,
-            mark
-        }
-    }
-
-    fn size(&self) -> usize {
-        self.size
-    }
-
-    fn type_id(&self) -> Self::TypeId {
-        self.type_id
-    }
-}
-
-fn introduce_guard_scope() {
-
-    
 }
 
 fn main() -> () {
+    let memory = Memory::new();
+    let mutator = ExampleMutator;
+
+    memory.mutate(&mutator, ()).unwrap_or_else(|err| {
+        eprintln!("ExampleMutator: failed to execute, {:?}", err);
+        std::process::exit(1)
+    });
 }

@@ -1,7 +1,9 @@
 // Resources:
 // - https://www.steveblackburn.org/pub(crate)s/papers/immix-pldi-2008.pdf
 // - https://rust-hosted-langs.github.io/book/chapter-simple-bump.html -- Section 3.X
-use crate::{alloc_api::AllocError, block::*};
+
+use crate::block::Block;
+use crate::error::{AllocError, BlockError};
 
 // Constants from Immix Paper
 const BLOCK_SIZE_BITS: usize = 15;

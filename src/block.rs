@@ -1,6 +1,8 @@
 use std::ptr::NonNull;
 use std::alloc::Layout;
 
+use crate::error::BlockError;
+
 pub(crate) struct Block {
     ptr: BlockPtr,
     size: BlockSize,
@@ -8,12 +10,6 @@ pub(crate) struct Block {
 
 pub(crate) type BlockPtr = NonNull<u8>;
 pub(crate) type BlockSize = usize;
-
-#[derive(Debug)]
-pub(crate) enum BlockError {
-    BadRequest,
-    OOM, 
-}
 
 impl Block {
     pub(crate) fn build(size: BlockSize) -> Result<Self, BlockError> {

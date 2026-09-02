@@ -1,5 +1,13 @@
-use crate::{alloc_api::*, block::*, bump::*};
-use std::{cell::UnsafeCell, marker::PhantomData, mem::replace, ptr::NonNull};
+
+use crate::object::Mark;
+use crate::error::{AllocError, BlockError};
+use crate::rawptr::{AllocHeader, AllocObject, AllocRaw, RawPtr};
+use crate::bump::{ALLOC_ALIGNMENT, BumpAllocator, SizeClass};
+
+use std::cell::UnsafeCell;
+use::std::mem::replace;
+use::std::ptr::NonNull;
+use::std::{marker::PhantomData};
 
 const WORD_SIZE: usize = size_of::<usize>();
 
@@ -12,10 +20,6 @@ pub struct BlockList {
 pub struct StickyImmixHeap<H: AllocHeader> {
     inner: UnsafeCell<BlockList>,
     _header_type: PhantomData<*const H>,
-}
-
-pub struct Heap<H: AllocHeader> {
-    heap: StickyImmixHeap<H>,
 }
 
 impl BlockList {

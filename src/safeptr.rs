@@ -21,6 +21,17 @@ pub struct CellPtr<T: Sized> {
 }
 
 impl<T: Sized> CellPtr<T> {
+    /// assumes `ptr` is the result of a success `Heap::alloc` call
+    pub fn new_from(ptr: ScopedPtr<'_, T>) -> Self {
+        unsafe {
+            Self {
+                inner: Cell::new(
+                    RawPtr::new(ptr.value as *const T)
+                )
+            }
+        }
+    }
+
     pub fn get<'guard>(&self, guard: &'guard dyn MutatorScope) -> ScopedPtr<'guard, T> {
         ScopedPtr {
             value: self.inner.get().scoped_ref(guard)

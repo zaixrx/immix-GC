@@ -9,6 +9,7 @@ pub enum Mark {
 #[derive(Clone, Copy)]
 pub enum ObjectType {
     SynI32,
+    SynObject,
     SynArray,
 }
 

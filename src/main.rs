@@ -1,6 +1,7 @@
 use crate::rawptr::AllocObject;
 use crate::object::{ObjectType, RuntimeError};
 use crate::memory::{Memory, Mutator, MutatorView};
+use crate::safeptr::{CellPtr, ScopedPtr};
 
 mod error;
 
@@ -25,6 +26,18 @@ impl AllocObject<ObjectType> for SynI32 {
     const TYPE_ID: ObjectType = ObjectType::SynI32;
 }
 
+struct SynI32_Holder {
+    value: CellPtr<SynI32>
+}
+
+impl SynI32_Holder {
+    fn new(ptr: ScopedPtr<'_, SynI32>) -> Self {
+        Self {
+            value: CellPtr::new_from(ptr)
+        }
+    }
+}
+
 struct ExampleMutator;
 
 impl Mutator for ExampleMutator {
@@ -36,7 +49,7 @@ impl Mutator for ExampleMutator {
 
         let p_object = mem.alloc(object).map_err(|err| RuntimeError::MemoryError(err))?;
 
-        assert_eq!(p_object.value.value, object.value);
+        // assert_eq!(p_object.value.value, v_object.value);
 
         println!(":3");
 

@@ -6,16 +6,17 @@ use crate::block::Block;
 use crate::error::{AllocError, BlockError};
 
 // Constants from Immix Paper
-const BLOCK_SIZE_BITS: usize = 15;
-const BLOCK_SIZE: usize = 1 << BLOCK_SIZE_BITS;
+pub(crate) const BLOCK_SIZE_BITS: usize = 15;
+pub(crate) const BLOCK_SIZE: usize = 1 << BLOCK_SIZE_BITS;
 
-const LINE_SIZE_BITS: usize = 7;
-const LINE_SIZE: usize = 1 << LINE_SIZE_BITS;
+pub(crate) const LINE_SIZE_BITS: usize = 7;
+pub(crate) const LINE_SIZE: usize = 1 << LINE_SIZE_BITS;
+
+pub(crate) const LINES_COUNT: usize = BLOCK_SIZE / LINE_SIZE;
+pub(crate) const BLOCK_CAPACITY: usize = BLOCK_SIZE - LINES_COUNT;
 
 pub(crate) const ALLOC_ALIGNMENT: usize = 2 * size_of::<usize>();
-const ALLOC_ALIGN_MASK: usize = !(ALLOC_ALIGNMENT - 1); 
-const LINES_COUNT: usize = BLOCK_SIZE / LINE_SIZE;
-const BLOCK_CAPACITY: usize = BLOCK_SIZE - LINES_COUNT;
+pub(crate) const ALLOC_ALIGN_MASK: usize = !(ALLOC_ALIGNMENT - 1); 
 
 #[derive(PartialEq)]
 /// Small: zero or one line,

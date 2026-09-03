@@ -1,12 +1,12 @@
 use crate::{error::AllocError, rawptr::{AllocHeader, AllocObject, AllocTypeId}};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mark {
     Live,
     Free,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectType {
     SynI32,
     SynObject,
@@ -38,6 +38,14 @@ impl AllocHeader for ObjectHeader {
             size,
             mark
         }
+    }
+
+    fn mark(&mut self) {
+        self.mark = Mark::Live;
+    }
+
+    fn is_marked(&self) -> bool {
+        self.mark == Mark::Live
     }
 
     fn size(&self) -> usize {

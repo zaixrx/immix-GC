@@ -1,13 +1,12 @@
-
 use crate::object::Mark;
 use crate::error::{AllocError, BlockError};
-use crate::rawptr::{AllocHeader, AllocObject, AllocRaw, RawPtr};
 use crate::bump::{ALLOC_ALIGNMENT, BumpAllocator, SizeClass};
+use crate::rawptr::{AllocHeader, AllocObject, AllocRaw, RawPtr};
 
+use std::mem::replace;
+use std::ptr::NonNull;
 use std::cell::UnsafeCell;
-use::std::mem::replace;
-use::std::ptr::NonNull;
-use::std::{marker::PhantomData};
+use std::marker::PhantomData;
 
 const WORD_SIZE: usize = size_of::<usize>();
 
@@ -137,14 +136,13 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
         let memory = self.inner_alloc(size)?;
 
         let mask = ALLOC_ALIGNMENT - 1;
-        // println!("{:016X}", memory as usize);
         assert_eq!((memory as usize & mask) ^ mask, mask);
 
         let header = Self::Header::new::<T>(object_size, Mark::Live);
 
         unsafe {
             let memory = memory as *mut Self::Header;
-            std::ptr::write(memory , header);
+            std::ptr::write(memory, header);
 
             let memory = memory.offset(1) as *mut T;
             std::ptr::write(memory, object);
@@ -202,7 +200,7 @@ mod raw_tests {
     #[test]
     fn test_alloc_head_none() -> Result<(), AllocError> {
         const ALLOC_SIZE: usize = LINE_SIZE;
-        /*static*/ assert!(SizeClass::new(ALLOC_SIZE) == SizeClass::Small);
+        /*static*/ assert_eq!(SizeClass::new(ALLOC_SIZE), SizeClass::Small);
 
         let mut heap = RawStickyImmixHeap::new();
 
@@ -213,7 +211,7 @@ mod raw_tests {
 
         // make sure head holds an newly allocated block, then validate allocation
         assert!(heap.head.is_some());
-        assert!(heap.head.unwrap().current_hole_size() == BLOCK_CAPACITY - ALLOC_SIZE);
+        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
 
         Ok(())
     }
@@ -221,7 +219,7 @@ mod raw_tests {
     #[test]
     fn test_alloc_head_some() -> Result<(), AllocError> {
         const ALLOC_SIZE: usize = LINE_SIZE;
-        /*static*/ assert!(SizeClass::new(ALLOC_SIZE) == SizeClass::Small);
+        /*static*/ assert_eq!(SizeClass::new(ALLOC_SIZE), SizeClass::Small);
 
         let mut heap = RawStickyImmixHeap::new();
 
@@ -231,7 +229,7 @@ mod raw_tests {
 
         // make sure all allocations are small, and with the exact requested size
         assert!(heap.head.is_some());
-        assert!(heap.head.unwrap().current_hole_size() == 0);
+        assert_eq!(heap.head.unwrap().current_hole_size(), 0);
 
         Ok(())
     }
@@ -239,7 +237,7 @@ mod raw_tests {
     #[test]
     fn test_alloc_head_some_oom() -> Result<(), AllocError> {
         const ALLOC_SIZE: usize = LINE_SIZE;
-        /*static*/ assert!(SizeClass::new(ALLOC_SIZE) == SizeClass::Small);
+        /*static*/ assert_eq!(SizeClass::new(ALLOC_SIZE), SizeClass::Small);
 
         let mut heap = RawStickyImmixHeap::new();
 
@@ -249,11 +247,11 @@ mod raw_tests {
 
         // make sure new block got assaigned to `head` with correct allocation size
         assert!(heap.head.is_some());
-        assert!(heap.head.unwrap().current_hole_size() == BLOCK_CAPACITY - ALLOC_SIZE);
+        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
 
         // make sure old block entered `rest`, and that's it's filled as expected
-        assert!(heap.rest.len() == 1);
-        assert!(heap.rest[0].current_hole_size() == 0);
+        assert_eq!(heap.rest.len(), 1);
+        assert_eq!(heap.rest[0].current_hole_size(), 0);
 
         Ok(())
     }
@@ -261,7 +259,7 @@ mod raw_tests {
     #[test]
     fn test_alloc_overflow_none() -> Result<(), AllocError> {
         const ALLOC_SIZE: usize = BLOCK_SIZE / 2;
-        /*static*/ assert!(SizeClass::new(ALLOC_SIZE) == SizeClass::Medium);
+        /*static*/ assert_eq!(SizeClass::new(ALLOC_SIZE), SizeClass::Medium);
 
         let mut heap = RawStickyImmixHeap::new();
 
@@ -273,11 +271,11 @@ mod raw_tests {
 
         // make sure the old allocaiton is still inside `head` with the correct size
         assert!(heap.head.is_some());
-        assert!(heap.head.unwrap().current_hole_size() == BLOCK_CAPACITY - ALLOC_SIZE);
+        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
 
         // validate second allocation fellback to overflow, and has the expected size
         assert!(heap.overflow.is_some());
-        assert!(heap.overflow.unwrap().current_hole_size() == BLOCK_CAPACITY - ALLOC_SIZE);
+        assert_eq!(heap.overflow.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
 
         Ok(())
     }
@@ -285,7 +283,8 @@ mod raw_tests {
     #[test]
     fn test_alloc_overflow_some() -> Result<(), AllocError> {
         const ALLOC_SIZE: usize = BLOCK_SIZE / 3 + 6; // must be multiple of 8
-        /*static*/ assert!(SizeClass::new(ALLOC_SIZE) == SizeClass::Medium);
+        /*static*/ assert_eq!(SizeClass::new(ALLOC_SIZE), SizeClass::Medium);
+
 
         let mut heap = RawStickyImmixHeap::new();
 
@@ -296,11 +295,11 @@ mod raw_tests {
 
         // make sure `head` still holds old block with the expected size
         assert!(heap.head.is_some());
-        assert!(heap.head.unwrap().current_hole_size() == BLOCK_CAPACITY - 2 * ALLOC_SIZE);
+        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - 2 * ALLOC_SIZE);
 
         // make sure `overflow` holds the new block with the expected size
         assert!(heap.overflow.is_some());
-        assert!(heap.overflow.unwrap().current_hole_size() == BLOCK_CAPACITY - 2 * ALLOC_SIZE);
+        assert_eq!(heap.overflow.unwrap().current_hole_size(), BLOCK_CAPACITY - 2 * ALLOC_SIZE);
 
         Ok(())
     }
@@ -308,7 +307,7 @@ mod raw_tests {
     #[test]
     fn test_alloc_overflow_some_oom() -> Result<(), AllocError> {
         const ALLOC_SIZE: usize = BLOCK_SIZE / 3 + 6; // must be multiple of 8
-        /*static*/ assert!(SizeClass::new(ALLOC_SIZE) == SizeClass::Medium);
+        /*static*/ assert_eq!(SizeClass::new(ALLOC_SIZE), SizeClass::Medium);
 
         let mut heap = RawStickyImmixHeap::new();
 
@@ -319,18 +318,68 @@ mod raw_tests {
 
         // make sure `head` still holds old block with the expected size
         assert!(heap.head.is_some());
-        assert!(heap.head.unwrap().current_hole_size() == BLOCK_CAPACITY - 2 * ALLOC_SIZE);
+        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - 2 * ALLOC_SIZE);
 
         // make sure `overflow` holds the new block with the expected size
         assert!(heap.overflow.is_some());
-        assert!(heap.overflow.unwrap().current_hole_size() == BLOCK_CAPACITY - ALLOC_SIZE);
+        assert_eq!(heap.overflow.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
 
         // make sure `rest` holds the filled overflow block with the expected size
-        assert!(heap.rest.len() == 1);
-        assert!(heap.rest[0].current_hole_size() == BLOCK_CAPACITY - 2 * ALLOC_SIZE);
+        assert_eq!(heap.rest.len(), 1);
+        assert_eq!(heap.rest[0].current_hole_size(), BLOCK_CAPACITY - 2 * ALLOC_SIZE);
 
         Ok(())
     }
 
     // TODO: test_alloc_large
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::object::{ObjectHeader, ObjectType};
+
+    struct Object {
+        id: u8,
+        name: String
+    }
+
+    impl AllocObject<ObjectType> for Object {
+        const TYPE_ID: ObjectType = ObjectType::SynObject;
+    }
+
+    impl Object {
+        fn alloc(heap: &StickyImmixHeap<ObjectHeader>, id: u8, name: &str) -> Result<RawPtr<Self>, AllocError> {
+            heap.alloc(Object {
+                id, name: String::from(name)
+            })
+        }
+    }
+
+    #[test]
+    fn test_alloc() -> Result<(), AllocError> {
+        let heap = StickyImmixHeap::new();
+
+        let object = Object::alloc(&heap, 1, "hello")?;
+
+        unsafe {
+            let object = object.ptr.read();
+
+            assert_eq!(object.id, 1);
+            assert_eq!(object.name, String::from("hello"));
+        }
+
+        let header: NonNull<ObjectHeader> = StickyImmixHeap::get_header(object.ptr.cast());
+
+        unsafe {
+            let header = header.read();
+
+            assert!(header.is_marked());
+            assert_eq!(header.size(), size_of::<ObjectHeader>());
+            assert_eq!(header.type_id(), Object::TYPE_ID);
+        }
+
+        Ok(())
+    }
 }

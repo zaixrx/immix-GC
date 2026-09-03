@@ -18,7 +18,7 @@ pub(crate) const BLOCK_CAPACITY: usize = BLOCK_SIZE - LINES_COUNT;
 pub(crate) const ALLOC_ALIGNMENT: usize = 2 * size_of::<usize>();
 pub(crate) const ALLOC_ALIGN_MASK: usize = !(ALLOC_ALIGNMENT - 1); 
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 /// Small: zero or one line,
 /// Medium: more than one line in a block,
 /// Large: more than block

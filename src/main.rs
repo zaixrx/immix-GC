@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
 use crate::rawptr::AllocObject;
 use crate::object::{ObjectType, RuntimeError};
 use crate::memory::{Memory, Mutator, MutatorView};
@@ -54,6 +56,45 @@ impl Mutator for ExampleMutator {
         println!(":3");
 
         Ok(())
+    }
+}
+
+struct RefCell<T> {
+    data: *mut T,
+    is_mutable: AtomicBool,
+    mut_refs: AtomicUsize
+}
+
+impl<T> RefCell<T> {
+    fn borrow_immu<'a>(&'a self) -> &'a T {
+        let mut do_panic = false;
+        do_panic |= self.is_mutable.load(Ordering::Acquire);
+        
+        if do_panic {
+            panic!("wtf man");
+        }
+
+        self.mut_refs.store(self.mut_refs.load(Ordering::Acquire) + 1, Ordering::Release);
+
+        unsafe {
+            &*self.data
+        }
+    }
+
+    fn borrow_mut<'a>(&'a self) -> &'a mut T {
+        let mut do_panic = false;
+        do_panic |= self.is_mutable.load(Ordering::Acquire);
+        do_panic |= self.mut_refs.load(Ordering::Acquire) > 0;
+
+        if do_panic {
+            panic!("wtf man");
+        }
+
+        self.is_mutable.store(true, Ordering::Release);
+
+        unsafe {
+            &mut *self.data
+        }
     }
 }
 

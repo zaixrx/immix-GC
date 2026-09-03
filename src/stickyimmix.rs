@@ -152,9 +152,10 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
     }
 
     /// get's zero initialized
-    fn alloc_array(&self, arr_size: usize) -> Result<RawPtr<u8>, AllocError> {
+    fn alloc_array(&self, size: usize) -> Result<RawPtr<u8>, AllocError> {
         let header_size = size_of::<Self::Header>();
-        let total_size = header_size + arr_size;
+        let array_size = size;
+        let total_size = header_size + array_size;
 
         let size = (total_size + WORD_SIZE - 1) / WORD_SIZE;
         let memory = self.inner_alloc(size)?;
@@ -162,14 +163,16 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
         let mask = WORD_SIZE - 1;
         assert_eq!((memory as usize & mask) ^ mask, mask);
 
-        let header = Self::Header::new_array(size, Mark::Live);
+        let header = Self::Header::new_array(array_size, Mark::Live);
 
         unsafe {
             let memory = memory as *mut Self::Header;
             std::ptr::write(memory, header);
 
             let memory = memory.offset(1) as *mut u8;
-            let slice = std::slice::from_raw_parts_mut(memory, size);
+            let memory_size = size * WORD_SIZE - header_size;
+
+            let slice = std::slice::from_raw_parts_mut(memory, memory_size);
             for byte in slice {
                 *byte = 0;
             }
@@ -290,7 +293,6 @@ mod raw_tests {
 
         for _ in 0 .. 4 {
             let _ = heap.alloc(ALLOC_SIZE)?;
-            println!("{}", heap.head.as_ref().unwrap().current_hole_size());
         }
 
         // make sure `head` still holds old block with the expected size
@@ -313,7 +315,6 @@ mod raw_tests {
 
         for _ in 0 .. 5 {
             let _ = heap.alloc(ALLOC_SIZE)?;
-            println!("{}", heap.head.as_ref().unwrap().current_hole_size());
         }
 
         // make sure `head` still holds old block with the expected size
@@ -376,8 +377,37 @@ mod tests {
             let header = header.read();
 
             assert!(header.is_marked());
-            assert_eq!(header.size(), size_of::<ObjectHeader>());
+            assert_eq!(header.size(), size_of::<Object>());
             assert_eq!(header.type_id(), Object::TYPE_ID);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_alloc_array() -> Result<(), AllocError> {
+        const ARRAY_SIZE: usize = 0x10;
+
+        let heap = StickyImmixHeap::<ObjectHeader>::new();
+
+        let arr = heap.alloc_array(ARRAY_SIZE)?;
+
+        unsafe {
+            let arr: &[u8] = std::slice::from_raw_parts(arr.ptr.as_ptr(), ARRAY_SIZE);
+
+            for &byte in arr {
+                assert_eq!(byte, 0);
+            }
+        }
+
+        let header: NonNull<ObjectHeader> = StickyImmixHeap::get_header(arr.ptr.cast());
+
+        unsafe {
+            let header = header.read();
+
+            assert!(header.is_marked());
+            assert_eq!(header.size(), ARRAY_SIZE);
+            assert_eq!(header.type_id(), ObjectType::SynArray);
         }
 
         Ok(())

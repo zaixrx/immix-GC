@@ -15,6 +15,8 @@ impl<T: Sized> ScopedRef<T> for RawPtr<T> {
 
 /// used to bridge `RawPtr` and `ScopedPtr`
 /// by allowing to apply interior mutability
+/// specifically allowing for there to be mutable
+/// pointers
 #[derive(Clone)]
 pub struct CellPtr<T: Sized> {
     inner: Cell<RawPtr<T>>
@@ -48,6 +50,8 @@ pub struct ScopedPtr<'guard, T: Sized> {
 pub trait MutatorScope {}
 
 impl<'guard, T: Sized> ScopedPtr<'guard, T> {
+    // 'guard here may be redudent, but is a good enforcement in case
+    // `value` lifetime outlives `_guard`'s
     pub fn new(_guard: &'guard dyn MutatorScope, value: &'guard T) -> Self {
         Self {
             value

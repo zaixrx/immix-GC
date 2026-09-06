@@ -51,7 +51,7 @@ pub trait AllocHeader: Sized {
     /// Create a new header for an array type
     fn new_array(size: usize, mark: Mark) -> Self;
 
-    /// Set the mark value to "marked"
+    /// Set the mark value to "masarked"
     fn mark(&mut self);
 
     /// Get the current `Mark` value

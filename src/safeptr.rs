@@ -28,7 +28,7 @@ impl<T: Sized> CellPtr<T> {
         unsafe {
             Self {
                 inner: Cell::new(
-                    RawPtr::new(ptr.value as *const T)
+                    RawPtr::new(ptr.value)
                 )
             }
         }
@@ -38,6 +38,13 @@ impl<T: Sized> CellPtr<T> {
         ScopedPtr {
             value: self.inner.get().scoped_ref(guard)
         }
+    }
+
+    pub fn set<'guard>(&self, scoped: ScopedPtr<'guard, T>) {
+        let ptr = unsafe {
+            RawPtr::new(scoped.value)
+        };
+        self.inner.set(ptr);
     }
 }
 

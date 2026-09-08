@@ -7,22 +7,23 @@ pub enum Mark {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ObjectType {
-    SynI32,
+pub enum BaseType {
+    SynInteger,
+    SynFloating,
     SynObject,
     SynArray,
 }
 
-impl AllocTypeId for ObjectType {}
+impl AllocTypeId for BaseType {}
 
 pub struct ObjectHeader {
     size: usize,
     mark: Mark,
-    type_id: ObjectType,
+    type_id: BaseType,
 }
 
 impl AllocHeader for ObjectHeader {
-    type TypeId = ObjectType;
+    type TypeId = BaseType;
 
     fn new<O: AllocObject<Self::TypeId>>(size: usize, mark: Mark) -> Self {
         Self {
@@ -34,7 +35,7 @@ impl AllocHeader for ObjectHeader {
 
     fn new_array(size: usize, mark: Mark) -> Self {
         Self {
-            type_id: ObjectType::SynArray,
+            type_id: BaseType::SynArray,
             size,
             mark
         }
@@ -55,11 +56,4 @@ impl AllocHeader for ObjectHeader {
     fn type_id(&self) -> Self::TypeId {
         self.type_id
     }
-}
-
-// API(API): make this user-defined
-#[derive(Debug)]
-pub enum RuntimeError {
-    MemoryError(AllocError),
-    // ...
 }

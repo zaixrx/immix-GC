@@ -1,7 +1,6 @@
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-
+use crate::object::BaseType;
+use crate::error::RuntimeError;
 use crate::rawptr::AllocObject;
-use crate::object::{ObjectType, RuntimeError};
 use crate::memory::{Memory, Mutator, MutatorView};
 use crate::safeptr::{CellPtr, ScopedPtr};
 
@@ -19,25 +18,30 @@ mod memory;
 // TODO(API): make that user defined
 mod object;
 
-#[derive(Copy, Clone)]
 struct SynI32 {
     value: i32
 }
 
-impl AllocObject<ObjectType> for SynI32 {
-    const TYPE_ID: ObjectType = ObjectType::SynI32;
-}
-
-struct SynI32_Holder {
-    value: CellPtr<SynI32>
-}
-
-impl SynI32_Holder {
-    fn new(ptr: ScopedPtr<'_, SynI32>) -> Self {
-        Self {
-            value: CellPtr::new_from(ptr)
-        }
+impl SynI32 {
+    fn alloc<'guard>(mem: &'guard MutatorView, value: i32) -> Result<ScopedPtr<'guard, Self>, RuntimeError> {
+        mem.alloc(SynI32 { value }).map_err(Into::into)
     }
+}
+
+impl<'guard> ScopedPtr<'guard, SynI32> {
+    fn mutate<O, F>(&self, f: F) -> O
+    where 
+        F: for <'a> FnOnce(&'a mut SynI32) -> O
+    {
+        let m: &mut SynI32 = unsafe {
+            std::ptr::from_ref(self.value).cast_mut().as_mut_unchecked()
+        };
+        f(m)
+    }
+}
+
+impl AllocObject<BaseType> for SynI32 {
+    const TYPE_ID: BaseType = BaseType::SynI32;
 }
 
 struct ExampleMutator;
@@ -47,20 +51,21 @@ impl Mutator for ExampleMutator {
     type Output = ();
 
     fn run<'memory>(&self, mem: &'memory MutatorView, _input: Self::Input) -> Result<Self::Output, RuntimeError> {
-        let object = SynI32 { value: 694201337 };
+        let a = SynI32::alloc(mem, 1)?;
 
-        let p_object = mem.alloc(object).map_err(|err| RuntimeError::MemoryError(err))?;
+        a.mutate(|a| {
+            a.value = 255;
+        });
 
-        // assert_eq!(p_object.value.value, v_object.value);
-
-        println!(":3");
+        println!("{}", a.value.value);
 
         Ok(())
     }
 }
 
-fn main() -> () {
+fn main() {
     let memory = Memory::new();
+
     let mutator = ExampleMutator;
 
     memory.mutate(&mutator, ()).unwrap_or_else(|err| {

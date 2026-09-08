@@ -1,10 +1,10 @@
-use crate::error::AllocError;
+use crate::error::{AllocError, RuntimeError};
 use crate::rawptr::{AllocObject, AllocRaw};
 use crate::safeptr::{MutatorScope, ScopedPtr, ScopedRef};
 use crate::stickyimmix::StickyImmixHeap;
 
 // TODO(API): make this user-defined
-use crate::object::{RuntimeError, ObjectHeader, ObjectType};
+use crate::object::{ObjectHeader, BaseType};
 
 type Heap = StickyImmixHeap<ObjectHeader>;
 
@@ -27,7 +27,7 @@ impl<'memory> MutatorView<'memory> {
 
     pub fn alloc<T>(&'memory self, object: T) -> Result<ScopedPtr<'memory, T>, AllocError>
     where
-        T: AllocObject<ObjectType> {
+        T: AllocObject<BaseType> {
 
         Ok(
             ScopedPtr::new(

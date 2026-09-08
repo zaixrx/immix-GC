@@ -20,3 +20,16 @@ impl From<BlockError> for AllocError {
         }
     }
 }
+
+// API(API): make this user-defined
+#[derive(Debug)]
+pub enum RuntimeError {
+    MemoryError(AllocError),
+    // ...
+}
+
+impl From<AllocError> for RuntimeError {
+    fn from(e: AllocError) -> Self {
+        RuntimeError::MemoryError(e)
+    }
+}

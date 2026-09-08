@@ -339,15 +339,15 @@ mod raw_tests {
 mod tests {
     use super::*;
 
-    use crate::object::{ObjectHeader, ObjectType};
+    use crate::object::{ObjectHeader, BaseType};
 
     struct Object {
         id: u8,
         name: String
     }
 
-    impl AllocObject<ObjectType> for Object {
-        const TYPE_ID: ObjectType = ObjectType::SynObject;
+    impl AllocObject<BaseType> for Object {
+        const TYPE_ID: BaseType = BaseType::SynObject;
     }
 
     impl Object {
@@ -407,7 +407,7 @@ mod tests {
 
             assert!(header.is_marked());
             assert_eq!(header.size(), ARRAY_SIZE);
-            assert_eq!(header.type_id(), ObjectType::SynArray);
+            assert_eq!(header.type_id(), BaseType::SynArray);
         }
 
         Ok(())

@@ -41,7 +41,7 @@ pub trait MutatorScope {}
 
 /// used to safely derefrence `RawPtr`
 pub struct ScopedPtr<'guard, T: Sized> {
-    pub value: &'guard T,
+    value: &'guard T,
 }
 
 impl<'guard, T: Sized> ScopedPtr<'guard, T> {
@@ -51,6 +51,11 @@ impl<'guard, T: Sized> ScopedPtr<'guard, T> {
         Self {
             value
         }
+    }
+
+    /// give access to the underlying reference held by `ScopedPtr`
+    pub fn as_ref(&self) -> &'guard T {
+        self.value
     }
 }
 

@@ -16,11 +16,6 @@ pub struct RawStickyImmixHeap {
     rest: Vec<BumpAllocator>,
 }
 
-pub struct StickyImmixHeap<H: AllocHeader> {
-    inner: UnsafeCell<RawStickyImmixHeap>,
-    _header_type: PhantomData<*const H>,
-}
-
 impl RawStickyImmixHeap {
     pub fn new() -> Self {
         Self {
@@ -30,9 +25,9 @@ impl RawStickyImmixHeap {
         }
     }
 
-    pub fn alloc(&mut self, size: usize) -> Result<*const u8, AllocError> {
+    pub fn find_free_hole(&mut self, size: usize) -> Result<*const u8, AllocError> {
         let class = SizeClass::new(size);
-        if  class == SizeClass::Large {
+        if class == SizeClass::Large {
             todo!("RawStickyImmixHeap: SizeClass::Large")
         }
 
@@ -40,10 +35,10 @@ impl RawStickyImmixHeap {
             Some(ref mut head) => {
                 match class {
                     SizeClass::Medium if size > head.current_hole_size() => {
-                        self.overflow_alloc(size)
+                        self.find_free_hole_overflow(size)
                     },
                     _ => {
-                        match head.inner_alloc(size) {
+                        match head.alloc(size) {
                             Ok(space) => Ok(space),
                             Err(BlockError::OOM) => {
                                 let old = replace(head, BumpAllocator::build()
@@ -51,7 +46,7 @@ impl RawStickyImmixHeap {
 
                                 self.rest.push(old);
 
-                                head.inner_alloc(size).map_err(Into::into)
+                                head.alloc(size).map_err(Into::into)
                             },
                             Err(BlockError::BadRequest) => Err(AllocError::BadRequest)
                         }
@@ -62,7 +57,7 @@ impl RawStickyImmixHeap {
                 let mut bump = BumpAllocator::build()
                     .expect("RawStickyImmixHeap: out of memory");
 
-                let memory = bump.inner_alloc(size).map_err(Into::into);
+                let memory = bump.alloc(size).map_err(Into::into);
 
                 self.head = Some(bump);
 
@@ -73,10 +68,10 @@ impl RawStickyImmixHeap {
 
     // TODO: preallocate free blocks as appoesd of allocating on demand
     // expects a medium classed `size`, fails otherwise
-    fn overflow_alloc(&mut self, size: usize) -> Result<*const u8, AllocError> {
+    fn find_free_hole_overflow(&mut self, size: usize) -> Result<*const u8, AllocError> {
         match self.overflow {
             Some(ref mut overflow) => {
-                match overflow.inner_alloc(size) {
+                match overflow.alloc(size) {
                     Ok(space) => Ok(space),
                     Err(BlockError::OOM) => {
                         let old = replace(overflow, BumpAllocator::build()
@@ -84,7 +79,7 @@ impl RawStickyImmixHeap {
 
                         self.rest.push(old);
 
-                        overflow.inner_alloc(size).map_err(Into::into)
+                        overflow.alloc(size).map_err(Into::into)
                     },
                     Err(BlockError::BadRequest) => Err(AllocError::BadRequest)
                 }
@@ -93,7 +88,7 @@ impl RawStickyImmixHeap {
                 let mut bump = BumpAllocator::build()
                     .expect("RawStickyImmixHeap: out of memory");
 
-                let space = bump.inner_alloc(size).map_err(Into::into);
+                let space = bump.alloc(size).map_err(Into::into);
 
                 self.overflow = Some(bump);
 
@@ -101,6 +96,11 @@ impl RawStickyImmixHeap {
             }
         }
     }
+}
+
+pub struct StickyImmixHeap<H: AllocHeader> {
+    inner: UnsafeCell<RawStickyImmixHeap>,
+    _header_type: PhantomData<*const H>,
 }
 
 impl<H: AllocHeader> StickyImmixHeap<H> {
@@ -114,11 +114,11 @@ impl<H: AllocHeader> StickyImmixHeap<H> {
 
     /// Used to provide an immutable allocator interface, to comply with
     /// the internal mutability pattern
-    fn inner_alloc(&self, size: usize) -> Result<*const u8, AllocError> {
+    fn find_free_hole(&self, size: usize) -> Result<*const u8, AllocError> {
         let inner: &mut RawStickyImmixHeap = unsafe {
             &mut *self.inner.get()
         };
-        inner.alloc(size)
+        inner.find_free_hole(size)
     }
 }
 
@@ -133,7 +133,7 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
         let total_size = header_size + object_size;
 
         let size = (total_size + WORD_SIZE - 1) / WORD_SIZE;
-        let memory = self.inner_alloc(size)?;
+        let memory = self.find_free_hole(size)?;
 
         let mask = ALLOC_ALIGNMENT - 1;
         assert_eq!((memory as usize & mask) ^ mask, mask);
@@ -158,7 +158,7 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
         let total_size = header_size + array_size;
 
         let size = (total_size + WORD_SIZE - 1) / WORD_SIZE;
-        let memory = self.inner_alloc(size)?;
+        let memory = self.find_free_hole(size)?;
 
         let mask = WORD_SIZE - 1;
         assert_eq!((memory as usize & mask) ^ mask, mask);
@@ -210,7 +210,7 @@ mod raw_tests {
         // make sure head holds nothing
         assert!(heap.head.is_none());
 
-        let _ = heap.alloc(ALLOC_SIZE)?;
+        let _ = heap.find_free_hole(ALLOC_SIZE)?;
 
         // make sure head holds an newly allocated block, then validate allocation
         assert!(heap.head.is_some());
@@ -227,7 +227,7 @@ mod raw_tests {
         let mut heap = RawStickyImmixHeap::new();
 
         for _ in 0 .. BLOCK_CAPACITY / ALLOC_SIZE {
-            let _ = heap.alloc(ALLOC_SIZE)?;
+            let _ = heap.find_free_hole(ALLOC_SIZE)?;
         }
 
         // make sure all allocations are small, and with the exact requested size
@@ -245,7 +245,7 @@ mod raw_tests {
         let mut heap = RawStickyImmixHeap::new();
 
         for _ in 0 .. BLOCK_CAPACITY / ALLOC_SIZE + 1 {
-            let _ = heap.alloc(ALLOC_SIZE)?;
+            let _ = heap.find_free_hole(ALLOC_SIZE)?;
         }
 
         // make sure new block got assaigned to `head` with correct allocation size
@@ -269,7 +269,7 @@ mod raw_tests {
         assert!(heap.overflow.is_none());
 
         for _ in 0 .. 2 {
-            let _ = heap.alloc(ALLOC_SIZE)?;
+            let _ = heap.find_free_hole(ALLOC_SIZE)?;
         }
 
         // make sure the old allocaiton is still inside `head` with the correct size
@@ -292,7 +292,7 @@ mod raw_tests {
         let mut heap = RawStickyImmixHeap::new();
 
         for _ in 0 .. 4 {
-            let _ = heap.alloc(ALLOC_SIZE)?;
+            let _ = heap.find_free_hole(ALLOC_SIZE)?;
         }
 
         // make sure `head` still holds old block with the expected size
@@ -314,7 +314,7 @@ mod raw_tests {
         let mut heap = RawStickyImmixHeap::new();
 
         for _ in 0 .. 5 {
-            let _ = heap.alloc(ALLOC_SIZE)?;
+            let _ = heap.find_free_hole(ALLOC_SIZE)?;
         }
 
         // make sure `head` still holds old block with the expected size
@@ -339,7 +339,7 @@ mod raw_tests {
 mod tests {
     use super::*;
 
-    use crate::object::{ObjectHeader, BaseType};
+    use crate::object::{BaseHeader, BaseType};
 
     struct Object {
         id: u8,
@@ -351,7 +351,7 @@ mod tests {
     }
 
     impl Object {
-        fn alloc(heap: &StickyImmixHeap<ObjectHeader>, id: u8, name: &str) -> Result<RawPtr<Self>, AllocError> {
+        fn alloc(heap: &StickyImmixHeap<BaseHeader>, id: u8, name: &str) -> Result<RawPtr<Self>, AllocError> {
             heap.alloc(Object {
                 id, name: String::from(name)
             })
@@ -371,7 +371,7 @@ mod tests {
             assert_eq!(object.name, String::from("hello"));
         }
 
-        let header: NonNull<ObjectHeader> = StickyImmixHeap::get_header(object.ptr.cast());
+        let header: NonNull<BaseHeader> = StickyImmixHeap::get_header(object.ptr.cast());
 
         unsafe {
             let header = header.read();
@@ -388,7 +388,7 @@ mod tests {
     fn test_alloc_array() -> Result<(), AllocError> {
         const ARRAY_SIZE: usize = 0x10;
 
-        let heap = StickyImmixHeap::<ObjectHeader>::new();
+        let heap = StickyImmixHeap::<BaseHeader>::new();
 
         let arr = heap.alloc_array(ARRAY_SIZE)?;
 
@@ -400,7 +400,7 @@ mod tests {
             }
         }
 
-        let header: NonNull<ObjectHeader> = StickyImmixHeap::get_header(arr.ptr.cast());
+        let header: NonNull<BaseHeader> = StickyImmixHeap::get_header(arr.ptr.cast());
 
         unsafe {
             let header = header.read();

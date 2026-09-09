@@ -2,21 +2,9 @@ use crate::rawptr::RawPtr;
 
 use std::cell::Cell;
 
-/// used to provide a safe method to dereference a pointer
-pub trait ScopedRef<T> {
-    fn scoped_ref<'scope>(&self, guard: &'scope dyn MutatorScope) -> &'scope T;
-}
-
-impl<T: Sized> ScopedRef<T> for RawPtr<T> {
-    fn scoped_ref<'scope>(&self, _guard: &'scope dyn MutatorScope) -> &'scope T {
-        unsafe { &*self.ptr.as_ptr() }
-    }
-}
-
-/// used to bridge `RawPtr` and `ScopedPtr`
-/// by allowing to apply interior mutability
-/// specifically allowing for there to be mutable
-/// pointers
+/// used to bridge `RawPtr` and `ScopedPtr`by allowing to apply
+/// interior mutability specifically allowing for there to be 
+/// mutable pointers
 #[derive(Clone)]
 pub struct CellPtr<T: Sized> {
     inner: Cell<RawPtr<T>>
@@ -48,13 +36,13 @@ impl<T: Sized> CellPtr<T> {
     }
 }
 
+/// used to define the 'guard lifetime
+pub trait MutatorScope {}
+
 /// used to safely derefrence `RawPtr`
 pub struct ScopedPtr<'guard, T: Sized> {
     pub value: &'guard T,
 }
-
-/// used to define the 'guard lifetime
-pub trait MutatorScope {}
 
 impl<'guard, T: Sized> ScopedPtr<'guard, T> {
     // 'guard here may be redudent, but is a good enforcement in case
@@ -71,5 +59,19 @@ impl<'guard, T: Sized> std::ops::Deref for ScopedPtr<'guard, T> {
 
     fn deref(&self) -> &Self::Target {
         self.value
+    }
+}
+
+
+/// Used as a safety extension for `RawPtr`. See [this](https://doc.rust-lang.org/std/cell/struct.UnsafeCell.html#aliasing-rules) 
+/// about rust's aliasing rules, and [that](https://rust-hosted-langs.github.io/book/chapter-interp-alloc.html#pointers) 
+/// on how that would look like (implementation-wise) here
+pub trait ScopedRef<T> {
+    fn scoped_ref<'scope>(&self, guard: &'scope dyn MutatorScope) -> &'scope T;
+}
+
+impl<T: Sized> ScopedRef<T> for RawPtr<T> {
+    fn scoped_ref<'scope>(&self, _guard: &'scope dyn MutatorScope) -> &'scope T {
+        unsafe { &*self.ptr.as_ptr() }
     }
 }

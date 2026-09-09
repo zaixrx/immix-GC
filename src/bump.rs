@@ -121,7 +121,7 @@ impl BumpAllocator {
         cursor.checked_sub(limit).expect("BumpAllocator: cursor underflew limit")
     }
 
-    pub(crate) fn inner_alloc(&mut self, size: usize) -> Result<*const u8, BlockError> {
+    pub(crate) fn alloc(&mut self, size: usize) -> Result<*const u8, BlockError> {
         let ptr = self.cursor as usize;
         let limit = self.limit as usize;
 
@@ -140,7 +140,7 @@ impl BumpAllocator {
             if let Some((cursor, limit)) = self.meta.find_free_hole(start_offset, size) {
                 self.cursor = (cursor + base) as *const u8;
                 self.limit = (limit + base) as *const u8;
-                return self.inner_alloc(size);
+                return self.alloc(size);
             }
         }
 

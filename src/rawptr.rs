@@ -1,6 +1,6 @@
-use std::ptr::NonNull;
-
 use crate::{error::AllocError, object::Mark};
+
+use std::ptr::NonNull;
 
 /// by default a instance of `AllowRaw` returns a `RawPtr`, which
 /// are unsafe to use because it requires dereferncing a pointer
@@ -10,6 +10,8 @@ pub struct RawPtr<T: Sized> {
     pub(crate) ptr: NonNull<T>,
 }
 
+impl<T: Sized> Copy for RawPtr<T> {}
+
 impl<T: Sized> Clone for RawPtr<T> {
     fn clone(&self) -> Self {
         Self {
@@ -17,8 +19,6 @@ impl<T: Sized> Clone for RawPtr<T> {
         }
     }
 }
-
-impl<T: Sized> Copy for RawPtr<T> {}
 
 impl <T: Sized> RawPtr<T> {
     /// Creates a new `RawPtr` containing the given pointer (`ptr`).

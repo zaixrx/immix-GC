@@ -1,4 +1,4 @@
-use crate::{error::AllocError, rawptr::{AllocHeader, AllocObject, AllocTypeId}};
+use crate::rawptr::{AllocHeader, AllocObject, AllocTypeId};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mark {
@@ -16,13 +16,13 @@ pub enum BaseType {
 
 impl AllocTypeId for BaseType {}
 
-pub struct ObjectHeader {
+pub struct BaseHeader {
     size: usize,
     mark: Mark,
     type_id: BaseType,
 }
 
-impl AllocHeader for ObjectHeader {
+impl AllocHeader for BaseHeader {
     type TypeId = BaseType;
 
     fn new<O: AllocObject<Self::TypeId>>(size: usize, mark: Mark) -> Self {

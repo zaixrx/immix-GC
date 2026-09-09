@@ -1,17 +1,36 @@
-use crate::error::{AllocError, RuntimeError};
-use crate::rawptr::{AllocObject, AllocRaw};
-use crate::safeptr::{MutatorScope, ScopedPtr, ScopedRef};
 use crate::stickyimmix::StickyImmixHeap;
+use crate::object::{BaseHeader, BaseType};
+use crate::rawptr::{AllocObject, AllocRaw};
+use crate::error::{AllocError, RuntimeError};
+use crate::safeptr::{MutatorScope, ScopedPtr, ScopedRef};
 
-// TODO(API): make this user-defined
-use crate::object::{ObjectHeader, BaseType};
+type Heap = StickyImmixHeap<BaseHeader>;
 
-type Heap = StickyImmixHeap<ObjectHeader>;
+pub trait Mutator {
+    type Input;
+    type Output;
 
-/// Used as a temporary view of the heap, must be constructed
-/// from `Memory::mutate`
-/// 
-/// Allows mutation through the internal mutability pattern
+    fn run<'memory>(&self, mem: &'memory MutatorView, input: Self::Input) -> Result<Self::Output, RuntimeError>;
+}
+
+pub struct Memory {
+    heap: Heap
+}
+
+impl Memory {
+    pub fn new() -> Self {
+        Memory {
+            heap: Heap::new()
+        }
+    }
+
+    pub fn mutate<M: Mutator>(&self, m: &M, input: M::Input) -> Result<M::Output, RuntimeError> {
+        let mem = MutatorView::new(self);
+        m.run(&mem, input)
+    }
+}
+
+/// Used as a temporary guard for the heap, must be constructed in `Memory::mutate`
 pub struct MutatorView<'memory> {
     heap: &'memory Heap
 }
@@ -35,29 +54,5 @@ impl<'memory> MutatorView<'memory> {
                 self.heap.alloc(object)?.scoped_ref(self)
             )
         )
-    }
-}
-
-pub trait Mutator {
-    type Input;
-    type Output;
-
-    fn run<'memory>(&self, mem: &'memory MutatorView, input: Self::Input) -> Result<Self::Output, RuntimeError>;
-}
-
-pub struct Memory {
-    heap: Heap
-}
-
-impl Memory {
-    pub fn new() -> Self {
-        Memory {
-            heap: Heap::new()
-        }
-    }
-
-    pub fn mutate<M: Mutator>(&self, m: &M, input: M::Input) -> Result<M::Output, RuntimeError> {
-        let mem = MutatorView::new(self);
-        m.run(&mem, input)
     }
 }

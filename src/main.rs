@@ -41,7 +41,7 @@ impl<'guard> ScopedPtr<'guard, SynI32> {
 }
 
 impl AllocObject<BaseType> for SynI32 {
-    const TYPE_ID: BaseType = BaseType::SynI32;
+    const TYPE_ID: BaseType = BaseType::SynInteger;
 }
 
 struct ExampleMutator;

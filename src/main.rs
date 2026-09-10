@@ -1,32 +1,21 @@
 use std::cell::Cell;
 
-use crate::object::BaseType;
+use object::SynInteger;
+
 use crate::error::RuntimeError;
-use crate::rawptr::AllocObject;
 use crate::memory::{Memory, Mutator, MutatorView};
 use crate::safeptr::CellPtr;
 
 mod error;
-
 mod block;
 mod bump;
-
 mod rawptr;
 mod stickyimmix;
-
 mod safeptr;
 mod memory;
 
 // TODO(API): make that user defined
 mod object;
-
-struct SynInteger {
-    value: i64
-}
-
-impl AllocObject<BaseType> for SynInteger {
-    const TYPE_ID: BaseType = BaseType::SynInteger;
-}
 
 #[derive(Clone, Copy, PartialEq)]
 enum BorrowFlag {
@@ -45,7 +34,7 @@ struct SynIntegerMut {
 impl SynIntegerMut {
     fn alloc<'guard>(
         mem: &'guard MutatorView,
-        value: i64
+        value: isize
     ) -> Result<Self, RuntimeError> {
         mem.alloc(SynInteger {
             value
@@ -82,7 +71,7 @@ impl SynIntegerMut {
         }
 
         let mref = unsafe {
-            std::ptr::from_ref(self.inner.get(mem).as_ref()).cast_mut().as_mut_unchecked()
+            std::ptr::from_ref(self.inner.get(mem).as_ref()).cast_mut().as_mut().expect("unchecked")
         };
 
         self._borrow.set(BorrowFlag::Exclusive);

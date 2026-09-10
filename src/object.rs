@@ -9,8 +9,7 @@ pub enum Mark {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaseType {
     SynInteger,
-    SynFloating,
-    SynObject,
+    SynFloat,
     SynArray,
 }
 
@@ -56,4 +55,30 @@ impl AllocHeader for BaseHeader {
     fn type_id(&self) -> Self::TypeId {
         self.type_id
     }
+}
+
+pub struct SynInteger {
+    pub value: isize
+}
+
+impl AllocObject<BaseType> for SynInteger {
+    const TYPE_ID: BaseType = BaseType::SynInteger;
+}
+
+pub struct SynFloat {
+    pub value: f64,
+}
+
+impl AllocObject<BaseType> for SynFloat {
+    const TYPE_ID: BaseType = BaseType::SynFloat;
+}
+
+pub struct SynArray {
+    ptr: *const u8,
+    len: usize,
+    cap: usize,
+}
+
+impl AllocObject<BaseType> for SynArray {
+    const TYPE_ID: BaseType = BaseType::SynArray;
 }

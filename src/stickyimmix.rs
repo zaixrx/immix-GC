@@ -341,20 +341,17 @@ mod tests {
 
     use crate::object::{BaseHeader, BaseType};
 
-    struct Object {
-        id: u8,
-        name: String
+    struct RawSynInteger {
+        value: isize,
     }
 
-    impl AllocObject<BaseType> for Object {
-        const TYPE_ID: BaseType = BaseType::SynObject;
+    impl AllocObject<BaseType> for RawSynInteger {
+        const TYPE_ID: BaseType = BaseType::SynInteger;
     }
 
-    impl Object {
-        fn alloc(heap: &StickyImmixHeap<BaseHeader>, id: u8, name: &str) -> Result<RawPtr<Self>, AllocError> {
-            heap.alloc(Object {
-                id, name: String::from(name)
-            })
+    impl RawSynInteger {
+        fn alloc(heap: &StickyImmixHeap<BaseHeader>, value: isize) -> Result<RawPtr<Self>, AllocError> {
+            heap.alloc(RawSynInteger { value })
         }
     }
 
@@ -362,13 +359,11 @@ mod tests {
     fn test_alloc() -> Result<(), AllocError> {
         let heap = StickyImmixHeap::new();
 
-        let object = Object::alloc(&heap, 1, "hello")?;
+        let object = RawSynInteger::alloc(&heap, 1337)?;
 
         unsafe {
             let object = object.ptr.read();
-
-            assert_eq!(object.id, 1);
-            assert_eq!(object.name, String::from("hello"));
+            assert_eq!(object.value, 1337);
         }
 
         let header: NonNull<BaseHeader> = StickyImmixHeap::get_header(object.ptr.cast());
@@ -377,8 +372,8 @@ mod tests {
             let header = header.read();
 
             assert!(header.is_marked());
-            assert_eq!(header.size(), size_of::<Object>());
-            assert_eq!(header.type_id(), Object::TYPE_ID);
+            assert_eq!(header.size(), size_of::<RawSynInteger>());
+            assert_eq!(header.type_id(), RawSynInteger::TYPE_ID);
         }
 
         Ok(())

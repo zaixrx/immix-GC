@@ -21,16 +21,9 @@ impl<T: Sized> Clone for RawPtr<T> {
 }
 
 impl <T: Sized> RawPtr<T> {
-    /// Creates a new `RawPtr` containing the given pointer (`ptr`).
-    ///
-    /// # Safety
-    ///
-    /// `ptr` must not be null.
-    pub unsafe fn new(ptr: *const T) -> Self {
-        unsafe {
-            Self {
-                ptr: NonNull::new_unchecked(ptr as *mut T)
-            }
+    pub fn new(ptr: *const T) -> Self {
+        Self {
+            ptr: unsafe { NonNull::new_unchecked(ptr as *mut T) }
         }
     }
 }

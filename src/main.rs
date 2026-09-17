@@ -4,6 +4,7 @@ use object::SynInteger;
 
 use crate::error::RuntimeError;
 use crate::memory::{Memory, Mutator, MutatorView};
+use crate::rawptr::RawPtr;
 use crate::safeptr::CellPtr;
 
 mod error;
@@ -108,11 +109,13 @@ impl SynIntegerMut {
     }
 }
 
+struct Root<T>(RawPtr<T>);
+
 struct ExampleMutator;
 
 impl Mutator for ExampleMutator {
     type Input = ();
-    type Output = ();
+    type Output = Vec<Root<()>>;
 
     fn run<'memory>(&self, mem: &'memory MutatorView, _input: Self::Input) -> Result<Self::Output, RuntimeError> {
         let int = SynIntegerMut::alloc(mem, 1)?;
@@ -150,6 +153,19 @@ impl Mutator for ExampleMutator {
             println!("after: {}", a.value);
         });
 
+        let roots = vec![];
+
+        Ok(roots)
+    }
+}
+
+struct ExampleCollector;
+
+impl Mutator for ExampleCollector {
+    type Input = Vec<Root<()>>;
+    type Output = ();
+
+    fn run<'memory>(&self, mem: &'memory MutatorView, input: Self::Input) -> Result<Self::Output, RuntimeError> {
         Ok(())
     }
 }
@@ -157,10 +173,17 @@ impl Mutator for ExampleMutator {
 fn main() {
     let memory = Memory::new();
 
-    let mutator = ExampleMutator;
+    loop {
+        let mutator = ExampleMutator;
+        let roots = memory.mutate(&mutator, ()).unwrap_or_else(|err| {
+            eprintln!("ExampleMutator: failed to execute, {:?}", err);
+            std::process::exit(1)
+        });
 
-    memory.mutate(&mutator, ()).unwrap_or_else(|err| {
-        eprintln!("ExampleMutator: failed to execute, {:?}", err);
-        std::process::exit(1)
-    });
+        let collector = ExampleCollector;
+        memory.mutate(&collector, roots).unwrap_or_else(|err| {
+            eprintln!("Example Collector: failed to execute, {:?}", err);
+            std::process::exit(2);
+        });
+    }
 }

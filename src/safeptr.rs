@@ -13,12 +13,10 @@ pub struct CellPtr<T: Sized> {
 impl<T: Sized> CellPtr<T> {
     /// assumes `ptr` is the result of a success `Heap::alloc` call
     pub fn new_from(ptr: ScopedPtr<'_, T>) -> Self {
-        unsafe {
-            Self {
-                inner: Cell::new(
-                    RawPtr::new(ptr.value)
-                )
-            }
+        Self {
+            inner: Cell::new(
+                RawPtr::new(ptr.value)
+            )
         }
     }
 
@@ -29,9 +27,7 @@ impl<T: Sized> CellPtr<T> {
     }
 
     pub fn set<'guard>(&self, scoped: ScopedPtr<'guard, T>) {
-        let ptr = unsafe {
-            RawPtr::new(scoped.value)
-        };
+        let ptr = RawPtr::new(scoped.value);
         self.inner.set(ptr);
     }
 }

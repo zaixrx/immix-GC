@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 const WORD_SIZE: usize = size_of::<usize>();
 
 pub struct RawStickyImmixHeap {
-    head: Option<BumpAllocator>,
+    recycle: Option<BumpAllocator>,
     overflow: Option<BumpAllocator>,
     rest: Vec<BumpAllocator>,
 }
@@ -19,7 +19,7 @@ pub struct RawStickyImmixHeap {
 impl RawStickyImmixHeap {
     pub fn new() -> Self {
         Self {
-            head: None,
+            recycle: None,
             overflow: None,
             rest: Vec::new(),
         }
@@ -31,22 +31,22 @@ impl RawStickyImmixHeap {
             todo!("RawStickyImmixHeap: SizeClass::Large")
         }
 
-        match self.head {
-            Some(ref mut head) => {
+        match self.recycle {
+            Some(ref mut recycle) => {
                 match class {
-                    SizeClass::Medium if size > head.current_hole_size() => {
+                    SizeClass::Medium if size > recycle.current_hole_size() => {
                         self.find_free_hole_overflow(size)
                     },
                     _ => {
-                        match head.alloc(size) {
+                        match recycle.alloc(size) {
                             Ok(space) => Ok(space),
                             Err(BlockError::OOM) => {
-                                let old = replace(head, BumpAllocator::build()
+                                let old = replace(recycle, BumpAllocator::build()
                                     .expect("RawStickyImmixHeap: out of memory"));
 
                                 self.rest.push(old);
 
-                                head.alloc(size).map_err(Into::into)
+                                recycle.alloc(size).map_err(Into::into)
                             },
                             Err(BlockError::BadRequest) => Err(AllocError::BadRequest)
                         }
@@ -59,7 +59,7 @@ impl RawStickyImmixHeap {
 
                 let memory = bump.alloc(size).map_err(Into::into);
 
-                self.head = Some(bump);
+                self.recycle = Some(bump);
 
                 memory
             }
@@ -207,14 +207,14 @@ mod raw_tests {
 
         let mut heap = RawStickyImmixHeap::new();
 
-        // make sure head holds nothing
-        assert!(heap.head.is_none());
+        // make sure recycle holds nothing
+        assert!(heap.recycle.is_none());
 
         let _ = heap.find_free_hole(ALLOC_SIZE)?;
 
-        // make sure head holds an newly allocated block, then validate allocation
-        assert!(heap.head.is_some());
-        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
+        // make sure recycle holds an newly allocated block, then validate allocation
+        assert!(heap.recycle.is_some());
+        assert_eq!(heap.recycle.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
 
         Ok(())
     }
@@ -231,8 +231,8 @@ mod raw_tests {
         }
 
         // make sure all allocations are small, and with the exact requested size
-        assert!(heap.head.is_some());
-        assert_eq!(heap.head.unwrap().current_hole_size(), 0);
+        assert!(heap.recycle.is_some());
+        assert_eq!(heap.recycle.unwrap().current_hole_size(), 0);
 
         Ok(())
     }
@@ -248,9 +248,9 @@ mod raw_tests {
             let _ = heap.find_free_hole(ALLOC_SIZE)?;
         }
 
-        // make sure new block got assaigned to `head` with correct allocation size
-        assert!(heap.head.is_some());
-        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
+        // make sure new block got assaigned to `recycle` with correct allocation size
+        assert!(heap.recycle.is_some());
+        assert_eq!(heap.recycle.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
 
         // make sure old block entered `rest`, and that's it's filled as expected
         assert_eq!(heap.rest.len(), 1);
@@ -272,9 +272,9 @@ mod raw_tests {
             let _ = heap.find_free_hole(ALLOC_SIZE)?;
         }
 
-        // make sure the old allocaiton is still inside `head` with the correct size
-        assert!(heap.head.is_some());
-        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
+        // make sure the old allocaiton is still inside `recycle` with the correct size
+        assert!(heap.recycle.is_some());
+        assert_eq!(heap.recycle.unwrap().current_hole_size(), BLOCK_CAPACITY - ALLOC_SIZE);
 
         // validate second allocation fellback to overflow, and has the expected size
         assert!(heap.overflow.is_some());
@@ -295,9 +295,9 @@ mod raw_tests {
             let _ = heap.find_free_hole(ALLOC_SIZE)?;
         }
 
-        // make sure `head` still holds old block with the expected size
-        assert!(heap.head.is_some());
-        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - 2 * ALLOC_SIZE);
+        // make sure `recycle` still holds old block with the expected size
+        assert!(heap.recycle.is_some());
+        assert_eq!(heap.recycle.unwrap().current_hole_size(), BLOCK_CAPACITY - 2 * ALLOC_SIZE);
 
         // make sure `overflow` holds the new block with the expected size
         assert!(heap.overflow.is_some());
@@ -317,9 +317,9 @@ mod raw_tests {
             let _ = heap.find_free_hole(ALLOC_SIZE)?;
         }
 
-        // make sure `head` still holds old block with the expected size
-        assert!(heap.head.is_some());
-        assert_eq!(heap.head.unwrap().current_hole_size(), BLOCK_CAPACITY - 2 * ALLOC_SIZE);
+        // make sure `recycle` still holds old block with the expected size
+        assert!(heap.recycle.is_some());
+        assert_eq!(heap.recycle.unwrap().current_hole_size(), BLOCK_CAPACITY - 2 * ALLOC_SIZE);
 
         // make sure `overflow` holds the new block with the expected size
         assert!(heap.overflow.is_some());
